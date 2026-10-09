@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 2,
+  "id": "agent-workflow-canvas",
+  "name": "Agent 工作流画布",
+  "version": "2.3.0",
+  "description": "多Agent协作工作流画布。展示可换人的工作包、依赖、边界与验收，支持标准工程角色与本地助手动态扩展，支持 DAG 拓扑防冲突与计划呈现。",
+  "minAppVersion": "0.1013.0",
+  "entry": "index.js",
+  "icon": "assets/icon.svg",
+  "capabilities": [
+    "app/tools.expose-to-model",
+    "app/ui.open-external",
+    "app/resources.read",
+    "app/resources.write"
+  ],
+  "contributes": {
+    "cards": [
+      {
+        "id": "workflow",
+        "title": "工作流调度画布",
+        "description": "多Agent协作工作流调度画布",
+        "route": "/workflow",
+        "cardForm": "flush",
+        "titlebar": "solid",
+        "face": {
+          "image": "face.svg"
+        }
+      }
+    ]
+  }
+}

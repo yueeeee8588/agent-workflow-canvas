@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FAF6EE" />
+      <stop offset="100%" stop-color="#F2ECE0" />
+    </linearGradient>
+    <linearGradient id="cyanLine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3A6073" />
+      <stop offset="100%" stop-color="#537D96" />
+    </linearGradient>
+    <linearGradient id="greenLine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2E5A44" />
+      <stop offset="100%" stop-color="#3F7E5A" />
+    </linearGradient>
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#2B2520" flood-opacity="0.08" />
+    </filter>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="240" height="160" rx="14" fill="url(#bg)" stroke="#DFD7C8" stroke-width="1.5" />
+
+  <!-- 拓扑连接线 -->
+  <path d="M 50 80 C 80 80, 80 50, 110 50" fill="none" stroke="url(#cyanLine)" stroke-width="2.5" stroke-dasharray="4 2" />
+  <path d="M 50 80 C 80 80, 80 110, 110 110" fill="none" stroke="url(#cyanLine)" stroke-width="2.5" />
+  <path d="M 110 50 C 140 50, 140 80, 170 80" fill="none" stroke="url(#greenLine)" stroke-width="2.5" />
+  <path d="M 110 110 C 140 110, 140 80, 170 80" fill="none" stroke="url(#greenLine)" stroke-width="2.5" stroke-dasharray="4 2" />
+
+  <!-- 节点 1 (发令) -->
+  <g filter="url(#cardShadow)">
+    <rect x="30" y="62" width="40" height="36" rx="8" fill="#FFFFFF" stroke="#DFD7C8" stroke-width="1.2" />
+    <circle cx="50" cy="74" r="5" fill="#3A6073" />
+    <rect x="38" y="85" width="24" height="4" rx="2" fill="#8E8376" />
+  </g>
+
+  <!-- 节点 2 (分支 A) -->
+  <g filter="url(#cardShadow)">
+    <rect x="90" y="32" width="40" height="36" rx="8" fill="#FFFFFF" stroke="#3A6073" stroke-width="1.4" />
+    <circle cx="110" cy="44" r="5" fill="#3A6073" />
+    <rect x="98" y="55" width="24" height="4" rx="2" fill="#537D96" />
+  </g>
+
+  <!-- 节点 3 (分支 B) -->
+  <g filter="url(#cardShadow)">
+    <rect x="90" y="92" width="40" height="36" rx="8" fill="#FFFFFF" stroke="#DFD7C8" stroke-width="1.2" />
+    <circle cx="110" cy="104" r="5" fill="#B83B26" />
+    <rect x="98" y="115" width="24" height="4" rx="2" fill="#8E8376" />
+  </g>
+
+  <!-- 节点 4 (汇聚验收) -->
+  <g filter="url(#cardShadow)">
+    <rect x="150" y="62" width="40" height="36" rx="8" fill="#FFFFFF" stroke="#2E5A44" stroke-width="1.5" />
+    <circle cx="170" cy="74" r="5" fill="#2E5A44" />
+    <rect x="158" y="85" width="24" height="4" rx="2" fill="#2E5A44" />
+  </g>
+
+  <!-- 底部徽标 -->
+  <text x="120" y="146" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#6A6055" letter-spacing="1">AGENT WORKFLOW CANVAS</text>
+</svg>

@@ -1,0 +1,19 @@
+{
+  "name": "agent-workflow-canvas",
+  "version": "2.3.0",
+  "description": "Agent 工作流画布 V2.3 - 复杂工程评估与审核发令画布，支持完整 DAG 拓扑、共享写入冲突串行化消解与 5.0 协作规范",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test/**/*.test.js"
+  },
+  "keywords": [
+    "hana",
+    "workflow",
+    "dag",
+    "canvas",
+    "collaboration-5.0"
+  ],
+  "author": "Yue & Contributors",
+  "license": "MIT"
+}
