@@ -352,8 +352,11 @@ export default function registerWorkflowRoutes(app, ctx) {
           }, 502);
         }
 
-        // 严格化总线回执判断：宿主正式成功回执为 accepted === true，兼容 mock 的 ok === true
-        const isAccepted = Boolean(busResp && (busResp.accepted === true || busResp.ok === true));
+        // 严格化总线回执判断：宿主正式成功回执必须包含 accepted === true（或合法兼容 mock 的 ok === true，但严禁 accepted 为 false）
+        const isAccepted = Boolean(
+          busResp &&
+          (busResp.accepted === true || (busResp.ok === true && busResp.accepted !== false))
+        );
         if (!isAccepted) {
           const errMsg = "宿主总线应答格式无效或未包含明确成功确认 (accepted !== true)";
           rec.status = "delivery_unknown";

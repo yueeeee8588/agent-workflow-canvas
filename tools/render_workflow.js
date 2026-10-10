@@ -7,9 +7,11 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { validateWorkflowInput, validateWorkflowId, SecurityValidationError } from "../lib/security.js";
 import { normalizeNodes, buildDagPlan } from "../lib/dag.js";
 import { resolveAgentRoster } from "../lib/agents.js";
+import { renderWorkflowPage } from "../lib/theme.js";
 
 export const name = "render_workflow";
 export const description =
@@ -188,6 +190,27 @@ export async function execute(input, ctx) {
   // 更新 latest 索引 (供兜底使用)
   const latestData = { workflowId, ts: new Date().toISOString() };
   writeFileSync(join(dir, "latest.json"), JSON.stringify(latestData, null, 2), "utf-8");
+
+  // 7.1 自动预渲染静态水墨 HTML 至 UI 目录，彻底杜绝宿主 APP_UI_NOT_FOUND
+  try {
+    const pageHtml = renderWorkflowPage(record, dagPlan, agentRoster);
+    // (a) 写入当前应用代码目录下的 ui/workflow/
+    const currentAppDir = fileURLToPath(new URL("..", import.meta.url));
+    const localUiWfDir = join(currentAppDir, "ui", "workflow");
+    if (!existsSync(localUiWfDir)) mkdirSync(localUiWfDir, { recursive: true });
+    writeFileSync(join(localUiWfDir, workflowId), pageHtml, "utf-8");
+    writeFileSync(join(localUiWfDir, `${workflowId}.html`), pageHtml, "utf-8");
+
+    // (b) 若存在宿主安装目录，也同步写入，确保即时生效
+    const hostAppsDir = join(ctx.dataDir, "..", "..", "apps", "agent-workflow-canvas", "ui", "workflow");
+    if (existsSync(join(ctx.dataDir, "..", "..", "apps", "agent-workflow-canvas"))) {
+      if (!existsSync(hostAppsDir)) mkdirSync(hostAppsDir, { recursive: true });
+      writeFileSync(join(hostAppsDir, workflowId), pageHtml, "utf-8");
+      writeFileSync(join(hostAppsDir, `${workflowId}.html`), pageHtml, "utf-8");
+    }
+  } catch (renderErr) {
+    ctx.log?.warn?.("static html pre-render failed", renderErr?.message);
+  }
 
   ctx.log?.info?.(`[render_workflow] 工作流已创建: ${workflowId} (${dagPlan.dispatchLane})`);
 
