@@ -17,9 +17,12 @@
    - 鼠标空白处抓手按住直接平移（Drag-to-Scroll）；
    - 普通鼠标滚轮横向直连映射；
    - 显式宣纸底色细滑块滚动条，告别截断遮挡。
-4. **唯一法定开工发令信号**：
-   - 用户确认人员排布后，点击卡片右下角的「🚀 立即执行」按钮；
-   - 通过原生 `window.card.emit('execute_workflow', payload)` 投递发令事件，主控与子代理方可领命施工。
+4. **法定开工发令门禁与正式跨会话投递**：
+   - 用户确认人员排布后，点击卡片右下角的「确认方案 · 启动全链路调度」按钮；
+   - 前端通过 App 独立后端端点 `POST /workflow/:id/execute` 提交发令；
+   - 后端使用正式会话接口 `ctx.bus.request("session:send", payload)` 向主会话显式指定 `scope: "all"` 进行跨归属投递；
+   - 应用清单（manifest.json）规范声明 `app/session.start-turn` 与 `app/sessions.manage` 双重权限；
+   - 严格区分失败语义：宿主权限拒绝（HTTP 403）安全回滚为 `idle` 状态并明确提示，允许用户授权后重试；未知网络超时（HTTP 504）则保守锁定为 `delivery_unknown`，坚决防重复发令。
 
 ---
 
@@ -78,6 +81,6 @@ agent-workflow-canvas/
 ## 🧪 验证与自测
 进入本目录执行：
 ```bash
-npm test
+node --test test/*.test.js
 ```
-全量自动化测试（涵盖拓扑分层、环路检测、并发写冲突拦截、"." 根路径防御、传输安全锁定、SSR 页面重载锁定与参数校验等）将全绿通过。
+全量 36 项自动化测试（涵盖拓扑分层、环路检测、并发写冲突拦截、"." 根路径防御、跨会话 scope 契约、宿主权限拒绝 403 明确报错与 idle 安全回滚、accepted: true 成功受理、传输安全锁定、SSR 页面重载锁定与参数校验等）100% 绿灯全绿通过。
