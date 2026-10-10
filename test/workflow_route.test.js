@@ -209,7 +209,7 @@ test("Route - POST execute 发送前落盘 pending，且成功后更新为 submi
           if (midState && midState.status === "pending") {
             checkedPendingBeforeAck = true;
           }
-          return { ok: true, id: "msg_ok" };
+          return { ok: true, id: "msg_ok", accepted: true };
         }
       }
     };
@@ -289,7 +289,7 @@ test("Route - POST execute 宿主明确拒绝 (ok===false) 时回滚为 idle 且
           if (callCount === 1) {
             return { ok: false, error: "SESSION_RATE_LIMIT" };
           }
-          return { ok: true, id: "msg_success" };
+          return { ok: true, id: "msg_success", accepted: true };
         }
       }
     };
@@ -347,7 +347,7 @@ test("Route - POST execute assignments 白名单校验拦截非法节点与未�
     const mockCtxWithBus = {
       dataDir: tempDir,
       sessionId: "sess_mock",
-      bus: { request: async () => ({ ok: true }) }
+      bus: { request: async () => ({ ok: true, accepted: true }) }
     };
     const appWithBus = createMockApp();
     registerWorkflowRoutes(appWithBus, mockCtxWithBus);
