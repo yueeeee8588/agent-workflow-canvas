@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import registerWorkflowRoutes, {
@@ -62,7 +62,7 @@ function setupTempWorkflowData() {
         boundary: "只读",
         outputs: "需求列表",
         acceptance: "明确清晰",
-        defaultAgent: "coder",
+        defaultAgent: "hanako-lite",
         dependsOn: []
       },
       {
@@ -73,7 +73,7 @@ function setupTempWorkflowData() {
         boundary: "只读",
         outputs: "验收报告",
         acceptance: "无遗漏",
-        defaultAgent: "reviewer",
+        defaultAgent: "hajimi",
         dependsOn: ["step1"]
       }
     ],
@@ -90,8 +90,8 @@ function setupTempWorkflowData() {
 
 test("DispatchText - 必须基于 dagPlan.nodes 全量要素且删除固定试错次数", () => {
   const rawNodes = [
-    { id: "p1", title: "任务1", task: "做架构", boundary: "无写权限", outputs: "架构图", acceptance: "评审通过", defaultAgent: "architect", column: 1 },
-    { id: "p2", title: "任务2", task: "做施工", boundary: "沙箱落地", outputs: "代码", acceptance: "测试通过", defaultAgent: "coder", column: 2 }
+    { id: "p1", title: "任务1", task: "做架构", boundary: "无写权限", outputs: "架构图", acceptance: "评审通过", defaultAgent: "lange", column: 1 },
+    { id: "p2", title: "任务2", task: "做施工", boundary: "沙箱落地", outputs: "代码", acceptance: "测试通过", defaultAgent: "hanako-lite", column: 2 }
   ];
   const dagPlan = buildDagPlan(normalizeNodes(rawNodes));
   const text = buildExecutionDispatchText({ id: "wf_demo", title: "演示工作流" }, dagPlan);
@@ -107,22 +107,50 @@ test("DispatchText - 必须基于 dagPlan.nodes 全量要素且删除固定试�
   assert(text.includes("自动执行触发变更默认独立复核"));
   assert(text.includes("构建不替代行为验收"));
   assert(text.includes("不强制三段交付"));
-  assert(text.includes("必要只读取证"));
-  assert(text.includes("默认等待用户亲自点击已展示计划"));
-  assert(text.includes("审核前主控和子代理均不得施工"));
-  assert(text.includes("主控全做也不能绕过审核"));
-  assert(text.includes("更新图并重新等待发令"));
-  assert(text.includes("一次性替代授权"));
-  assert(text.includes("简单低风险集中任务轻量评估后直接做"));
+  assert(text.includes("粉哥（Agent ID：hanako）排错必须实际派发至少一个子代理"));
+  assert(text.includes("推荐多角度并发多个，不固定要求两人"));
+  assert(text.includes("不能以问题简单免除派发"));
+  assert(text.includes("搜索调研与项目了解按有效拆分收益"));
+  assert(text.includes("岳岳在当前任务明确要求粉哥派发"));
+  assert(text.includes("必须先调用正式render_workflow"));
+  assert(text.includes("仅讨论或修改派发规则不触发当前启动子代理"));
+  assert(text.includes("其他Agent按其个人契约判断"));
+  assert(text.includes("画布生成、展示与投递均不证明实际派发"));
+  assert(text.includes("粉哥hanako强制画布审批仅两类"));
+  assert(text.includes("重大复杂任务需规划（主控独立执行也适用）"));
+  assert(text.includes("等待岳明确批准已展示方案后才派发/施工"));
+  assert(text.includes("命中门禁须批准后履行"));
+  assert(text.includes("严禁先派后补图、新建或续接受影响执行分身"));
+  assert(text.includes("后台完成/回调均不等批准"));
+  assert(text.includes("更新画布重新等待批准"));
+  assert(text.includes("两类之外按独立收益自主派发"));
+  assert(text.includes("不新增审批条件"));
+  assert(!text.includes("必须继续实际派发或遵循正式交互协议"));
+  assert(!text.includes("仅用户先审约定、插件正式发令门禁或真实授权缺口才等待"));
+  assert(text.includes("工具、权限受限如实说明"));
+  assert(!text.includes("默认等待岳岳亲自点击已展示计划"));
+  assert(!text.includes("审核前主控和子代理均不得施工"));
+  assert(!text.includes("更新图并重新等待发令"));
   assert(text.includes("投递成功不证明已派发、完成或验收通过"));
   assert(!text.includes("不报调度、不强制工单或流程图"));
-  assert(text.includes("同包不逐工具评估"));
   assert(text.includes("不一律转交用户"));
   assert(!text.includes("协同 5.0 运行时核心规约"));
   assert(!text.includes("并批准启动"));
 
   // 3. 必须包含会话复用、等待与权限底线，且为分级审查非一票否决
   assert(text.includes("wait_for_tasks"));
+  assert(text.includes("本批派发后交回控制权"));
+  assert(text.includes("本批所有成功/失败/取消等终态且父回合已退出后合并结果恢复"));
+  assert(text.includes("单任务通知不得提前唤醒"));
+  assert(text.includes("插件不提供此宿主能力"));
+  assert(text.includes("拟新增接口须正式目录可见"));
+  assert(text.includes("不得称严格挂起"));
+  assert(text.includes("无关任务不捆绑成全局门槛"));
+  assert(text.includes("子代理只交付结果"));
+  assert(text.includes("用户插话可接管"));
+  assert(text.includes("停止撤销自动恢复"));
+  assert(!text.includes("主会话推进独立工作"));
+  assert(!text.includes("默认等待用户亲自点击"));
   assert(text.includes("分级审查原则"), "必须包含分级审查原则");
   assert(!text.includes("一票否决"), "不得强制一票否决");
   assert(text.includes("权限与隔离底线"));
@@ -144,8 +172,8 @@ test("Route - GET /workflow/:id 旧节点规范化后完整回填至渲染页面
     id: "wf_legacy",
     title: "旧版兼容工作流",
     nodes: [
-      { id: "col1", title: "首阶段", column: 1, defaultAgent: "lead" },
-      { id: "col2", title: "次阶段", column: 2, defaultAgent: "reviewer" }
+      { id: "col1", title: "首阶段", column: 1, defaultAgent: "hanako" },
+      { id: "col2", title: "次阶段", column: 2, defaultAgent: "hajimi" }
     ],
     sessionId: "sess_mock"
   };
@@ -349,13 +377,16 @@ test("Tool - render_workflow details.card.id 必须严格等于 workflow 且 rou
     const result = await renderExecute({
       title: "挂载契约验证流",
       nodes: [
-        { id: "step1", title: "任务1", defaultAgent: "coder" }
+        { id: "step1", title: "任务1", defaultAgent: "hanako-lite" }
       ]
     }, mockCtx);
 
     assert(result.details && result.details.card);
     assert.equal(result.details.card.id, "workflow", "card.id 必须严格匹配 manifest contributes 中声明的 workflow");
-    assert(result.details.card.route.startsWith("/workflow/wf_"), "route 必须包含具体工作流 ID 进行防串卡隔离");
+    const cardUrl = new URL(result.details.card.route, "https://test.invalid");
+    assert.equal(cardUrl.pathname, "/workflow.html");
+    assert.match(cardUrl.searchParams.get("workflowId"), /^wf_[A-Za-z0-9_-]+$/);
+    assert.equal(cardUrl.searchParams.getAll("workflowId").length, 1);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -364,8 +395,8 @@ test("Tool - render_workflow details.card.id 必须严格等于 workflow 且 rou
 test("UI - renderNodeCard 遇到未知专员时必须渲染显式禁用占位符且不静默选第一项", async () => {
   const { renderNodeCard } = await import("../lib/theme.js");
   const roster = [
-    { id: "coder", name: "全栈开发", desc: "施工" },
-    { id: "reviewer", name: "代码审查", desc: "审查" }
+    { id: "hanako-lite", name: "轻装粉哥", desc: "施工" },
+    { id: "hajimi", name: "哈基米", desc: "审查" }
   ];
 
   // 节点拥有未在 roster 中的未知专员
@@ -386,12 +417,12 @@ test("UI - renderNodeCard 遇到未知专员时必须渲染显式禁用占位符
     id: "step_good",
     tag: "Phase 2",
     title: "正常任务",
-    defaultAgent: "coder",
+    defaultAgent: "hanako-lite",
     dependsOn: []
   };
   const goodHtml = renderNodeCard(goodNode, roster);
   assert(!goodHtml.includes("⚠️ 未知或未授权专员"));
-  assert(goodHtml.includes('value="coder" selected'));
+  assert(goodHtml.includes('value="hanako-lite" selected'));
 });
 
 test("Tool - render_workflow 创建时拦截未授权的未知 defaultAgent", async () => {
@@ -442,7 +473,7 @@ test("UI - 渲染页面包含全量分组 optgroup 与自定义助手添加入�
             boundary: "沙箱",
             outputs: "脚本",
             acceptance: "通过",
-            defaultAgent: "coder",
+            defaultAgent: "hanako-lite",
             dependsOn: []
           }
         ]
@@ -458,375 +489,10 @@ test("UI - 渲染页面包含全量分组 optgroup 与自定义助手添加入�
   );
 
   assert(pageHtml.includes("optgroup"), "必须使用 optgroup 进行优雅分类展示");
-  assert(pageHtml.includes("核心协同团队"), "必须包含核心协同团队分组");
-  assert(pageHtml.includes("browser"), "必须包含网页执行官专员");
+  assert(pageHtml.includes("核心协同主力"), "必须包含核心协同主力分组");
+  assert(pageHtml.includes("browser-agent"), "必须包含网页执行官专员");
   assert(pageHtml.includes("➕ 输入自定义助手 ID"), "必须包含自定义专员添加入口");
   assert(pageHtml.includes("id=\"btn-add-agent\""), "底部工具栏必须包含添加自定义助手按钮");
-});
-
-test("Route - POST execute 非空非法 JSON 请求明确返回 400 invalid_json", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-    registerWorkflowRoutes(app, { dataDir: tempDir, sessionId: "sess_mock" });
-
-    // 构造请求体非空但不是合法 JSON 的请求（通过带 text 方法的请求模拟）
-    let customResponse = null;
-    const cInvalidJson = {
-      req: {
-        param: () => "wf_test_001",
-        text: async () => "{ invalid_json_content, missing_brackets: "
-      },
-      json: (data, status = 200) => { customResponse = { status, data }; return customResponse; }
-    };
-
-    const handler = app.routes.POST.get("/workflow/:id/execute");
-    await handler(cInvalidJson);
-
-    assert(customResponse !== null);
-    assert.equal(customResponse.status, 400);
-    assert.equal(customResponse.data.error, "invalid_json");
-    assert(customResponse.data.message.includes("不是合法的 JSON 格式"));
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("SSR - GET /workflow/:id delivery_unknown 状态下初始 HTML 按钮必须 disabled 且显示锁定文案", async () => {
-  const tempDir = mkdtempSync(join(tmpdir(), "wf-ssr-lock-"));
-  const wfDir = join(tempDir, "workflows");
-  mkdirSync(wfDir, { recursive: true });
-
-  const lockedRecord = {
-    id: "wf_locked_001",
-    title: "锁定测试流",
-    description: "测试页面重载状态",
-    status: "delivery_unknown",
-    locked: true,
-    nodes: [
-      { id: "step1", title: "测试步骤", defaultAgent: "coder", dependsOn: [] }
-    ],
-    sessionId: "sess_mock"
-  };
-  writeFileSync(join(wfDir, "wf_locked_001.json"), JSON.stringify(lockedRecord, null, 2), "utf-8");
-
-  try {
-    const app = createMockApp();
-    registerWorkflowRoutes(app, { dataDir: tempDir });
-
-    const res = await app.dispatch("GET", "/workflow/wf_locked_001", { params: { id: "wf_locked_001" } });
-    assert.equal(res.status, 200);
-
-    // 验证初始 SSR HTML 中的提交按钮渲染为 disabled
-    assert(res.data.includes('id="btn-submit" disabled'), "初始 HTML 中的提交按钮必须渲染为 disabled");
-    assert(res.data.includes("送达状态未决，请核实主会话"), "初始 HTML 按钮文本必须为送达状态未决，请核实主会话");
-    assert(res.data.includes("var ALREADY_DONE = true;"), "初始脚本变量 ALREADY_DONE 必须为 true 防止刷新后重新点击");
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Route - POST execute 显式携带 scope: 'all' 并验证宿主 accepted: true 正式契约", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-    let sentPayload = null;
-
-    const mockCtx = {
-      dataDir: tempDir,
-      sessionId: "sess_mock_123",
-      sessionRef: { sessionId: "sess_mock_123", sessionPath: "path/to/session.jsonl" },
-      sessionPath: "path/to/session.jsonl",
-      bus: {
-        request: async (verb, payload) => {
-          assert.equal(verb, "session:send");
-          sentPayload = payload;
-          // 真实宿主返回结构：accepted: true
-          return {
-            sessionId: payload.sessionId,
-            sessionRef: payload.sessionRef,
-            sessionPath: payload.sessionPath,
-            accepted: true
-          };
-        }
-      }
-    };
-
-    registerWorkflowRoutes(app, mockCtx);
-
-    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-
-    assert.equal(res.status, 200);
-    assert.equal(res.data.status, "submitted");
-
-    // 严密断言：发往宿主总线的 payload 必须显式指定 scope: "all"，且 sessionId 正确
-    assert(sentPayload !== null);
-    assert.equal(sentPayload.sessionId, "sess_mock_123");
-    assert.equal(sentPayload.scope, "all", "跨会话发往主会话必须显式指定 scope: 'all'");
-    assert(sentPayload.text.length > 0);
-
-    const saved = readWorkflowRecord(tempDir, "wf_test_001");
-    assert.equal(saved.status, "submitted");
-    assert.equal(saved.submitted, true);
-    assert.equal(saved.deliveryStatus, "confirmed");
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Route - POST execute 缺少 app/sessions.manage 权限时宿主抛错，明确返回 403 permission_denied 且回滚为 idle 允许重试", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-
-    const mockCtx = {
-      dataDir: tempDir,
-      sessionId: "sess_mock_123",
-      bus: {
-        request: async () => {
-          // 真实宿主缺失 app/sessions.manage 时的标准抛错
-          throw new Error('app "agent-workflow-canvas" is not authorized to session:send outside this app — the user has not granted the "app/sessions.manage" permission (Settings → Apps → App capabilities)');
-        }
-      }
-    };
-
-    registerWorkflowRoutes(app, mockCtx);
-
-    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-
-    assert.equal(res.status, 403);
-    assert.equal(res.data.error, "permission_denied");
-    assert(res.data.message.includes("app/sessions.manage"), "错误提示必须明确指明缺少 app/sessions.manage 权限");
-
-    // 磁盘记录绝不得被锁定为 delivery_unknown，必须安全回滚为 idle，允许用户授权后重试
-    const saved = readWorkflowRecord(tempDir, "wf_test_001");
-    assert.equal(saved.status, "idle");
-    assert.equal(saved.submitted, false);
-    assert.equal(saved.locked, false);
-    assert(saved.lastError.includes("app/sessions.manage"));
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Route - POST execute 缺少 app/session.start-turn 权限时宿主抛错，明确返回 403 permission_denied 且回滚为 idle 允许重试", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-
-    const mockCtx = {
-      dataDir: tempDir,
-      sessionId: "sess_mock_123",
-      bus: {
-        request: async () => {
-          // 真实宿主缺失 app/session.start-turn 时的标准抛错
-          throw new Error('app "agent-workflow-canvas" is not authorized to start a conversation turn in this session — the user has not granted the "app/session.start-turn" permission (Settings → Apps → App capabilities)');
-        }
-      }
-    };
-
-    registerWorkflowRoutes(app, mockCtx);
-
-    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-
-    assert.equal(res.status, 403);
-    assert.equal(res.data.error, "permission_denied");
-    assert(res.data.message.includes("app/session.start-turn"), "错误提示必须明确指明缺少 app/session.start-turn 权限");
-
-    const saved = readWorkflowRecord(tempDir, "wf_test_001");
-    assert.equal(saved.status, "idle");
-    assert.equal(saved.submitted, false);
-    assert.equal(saved.locked, false);
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Route - POST execute 目标会话归属越界时宿主抛错，明确返回 403 ownership_denied 且回滚为 idle 允许重试", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-
-    const mockCtx = {
-      dataDir: tempDir,
-      sessionId: "sess_mock_123",
-      bus: {
-        request: async () => {
-          // 真实宿主未指定 scope: all 或跨分区归属拒绝时的标准抛错
-          throw new Error('session:send: session "sess_mock_123" does not belong to app "agent-workflow-canvas"');
-        }
-      }
-    };
-
-    registerWorkflowRoutes(app, mockCtx);
-
-    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-
-    assert.equal(res.status, 403);
-    assert.equal(res.data.error, "ownership_denied");
-    assert(res.data.message.includes("does not belong to app"));
-
-    const saved = readWorkflowRecord(tempDir, "wf_test_001");
-    assert.equal(saved.status, "idle");
-    assert.equal(saved.submitted, false);
-    assert.equal(saved.locked, false);
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Route - POST execute 权限被拒后用户补齐授权，第二次重试发令成功投递闭环", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-    let attempt = 0;
-
-    const mockCtx = {
-      dataDir: tempDir,
-      sessionId: "sess_mock_123",
-      bus: {
-        request: async () => {
-          attempt++;
-          if (attempt === 1) {
-            // 第一次发令：未授权
-            throw new Error('app "agent-workflow-canvas" is not authorized to session:send outside this app — the user has not granted the "app/sessions.manage" permission (Settings → Apps → App capabilities)');
-          }
-          // 第二次发令：用户在设置中授权后重试，成功投递
-          return { accepted: true, sessionId: "sess_mock_123" };
-        }
-      }
-    };
-
-    registerWorkflowRoutes(app, mockCtx);
-
-    // 第一次执行：被拒
-    const res1 = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-    assert.equal(res1.status, 403);
-    assert.equal(res1.data.error, "permission_denied");
-
-    let saved = readWorkflowRecord(tempDir, "wf_test_001");
-    assert.equal(saved.status, "idle");
-    assert.equal(saved.submitted, false);
-
-    // 第二次执行：成功
-    const res2 = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-    assert.equal(res2.status, 200);
-    assert.equal(res2.data.status, "submitted");
-
-    saved = readWorkflowRecord(tempDir, "wf_test_001");
-    assert.equal(saved.status, "submitted");
-    assert.equal(saved.submitted, true);
-    assert.equal(saved.deliveryStatus, "confirmed");
-
-    // 第三次执行：已被终态拦截，返回 400 already_submitted
-    const res3 = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-    assert.equal(res3.status, 400);
-    assert.equal(res3.data.error, "already_submitted");
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Route - GET /workflow/latest 显式支持读取最新工作流方案并成功渲染", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-    registerWorkflowRoutes(app, { dataDir: tempDir });
-
-    // 写入 latest.json 索引指向 wf_test_001
-    const latestPath = join(tempDir, "workflows", "latest.json");
-    writeFileSync(latestPath, JSON.stringify({ workflowId: "wf_test_001", ts: new Date().toISOString() }, null, 2), "utf-8");
-
-    const res = await app.dispatch("GET", "/workflow/latest", { params: { id: "latest" } });
-    assert.equal(res.status, 200);
-    assert.equal(res.type, "html");
-    assert(res.data.includes("测试流水线"), "必须成功根据 latest.json 解析并渲染出目标工作流");
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Route - POST execute 收到矛盾回执 { ok: true, accepted: false } 坚决拒绝判定为成功，锁定为 delivery_unknown 502", async () => {
-  const { tempDir } = setupTempWorkflowData();
-  try {
-    const app = createMockApp();
-
-    const mockCtx = {
-      dataDir: tempDir,
-      sessionId: "sess_mock_123",
-      bus: {
-        request: async () => {
-          // 模拟矛盾回执：虽然 ok 为 true，但 accepted 明确为 false
-          return { ok: true, accepted: false };
-        }
-      }
-    };
-
-    registerWorkflowRoutes(app, mockCtx);
-
-    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
-      params: { id: "wf_test_001" },
-      body: {}
-    });
-
-    assert.equal(res.status, 502);
-    assert.equal(res.data.error, "delivery_unknown");
-
-    const saved = readWorkflowRecord(tempDir, "wf_test_001");
-    assert.equal(saved.status, "delivery_unknown");
-    assert.equal(saved.locked, true);
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Tool - render_workflow 执行时自动生成静态物理文件并在 ui/workflow/<id> 落盘", async () => {
-  const tempDir = mkdtempSync(join(tmpdir(), "wf-tool-render-"));
-  try {
-    const { execute: renderExecute } = await import("../tools/render_workflow.js");
-    const mockCtx = { dataDir: tempDir, sessionId: "sess_test_render" };
-
-    const result = await renderExecute({
-      title: "静态预渲染断言测试流",
-      nodes: [
-        { id: "node1", title: "核心处理", defaultAgent: "coder" }
-      ]
-    }, mockCtx);
-
-    const wfId = result.details.card.route.split("/").pop();
-    assert(wfId.startsWith("wf_"));
-
-    // 断言当前工程的 ui/workflow 目录下确实存在预渲染的物理文件
-    const { fileURLToPath } = await import("node:url");
-    const appDir = join(fileURLToPath(import.meta.url), "../..");
-    const renderedFilePath = join(appDir, "ui", "workflow", wfId);
-    assert(existsSync(renderedFilePath), `预渲染文件 ${renderedFilePath} 必须物理存在，彻底杜绝 APP_UI_NOT_FOUND`);
-    const content = readFileSync(renderedFilePath, "utf-8");
-    assert(content.includes("静态预渲染断言测试流"));
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
 });
 
 

@@ -1,13 +1,14 @@
 /**
  * 工作流看板路由服务 (V2 增强版)
  * 职责：
- * 1. 严格安全 ID 校验防路径穿越
+ * 1. 严格安全 ID 校验防路径穿越，支持 :id === "latest" 动态解析
  * 2. 独立固定路由 /workflow/:id 防止多卡片间串卡
- * 3. 发送前落盘 pending，超时/未知异常 delivery_unknown 安全锁定防重复投递
- * 4. 深度契约检查：busResp ok===false 决不视作成功；busy与明确拒绝可恢复
- * 5. assignments 严格白名单校验 (节点必须存在，专员必须在有效名录中)
- * 6. 发送指令基于最终 dagPlan.nodes 全量要素 (层级/依赖/边界/验收五要素/复用等待契约)
- * 7. GET 端点保证旧数据在规范化后完整呈现 DAG 依赖与贝塞尔边线
+ * 3. 补齐 sessionId 解析，双参数 session:send 保障宿主寻址可靠性
+ * 4. 发送前落盘 pending，超时/未知异常 delivery_unknown 安全锁定防重复投递
+ * 5. 深度契约检查：busResp ok===false 决不视作成功；busy与明确拒绝可恢复
+ * 6. assignments 严格白名单校验 (节点必须存在，专员必须在有效名录中)
+ * 7. 发送指令基于最终 dagPlan.nodes 全量要素 (层级/依赖/边界/验收五要素/复用等待契约)
+ * 8. GET 端点保证旧数据在规范化后完整呈现 DAG 依赖与贝塞尔边线
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
@@ -16,6 +17,7 @@ import { validateWorkflowId, SecurityValidationError, sanitizeString } from "../
 import { buildDagPlan, normalizeNodes } from "../lib/dag.js";
 import { resolveAgentRoster, isValidAgentId } from "../lib/agents.js";
 import { renderWorkflowPage } from "../lib/theme.js";
+import { resolveSessionIdFromPath } from "../lib/session_resolver.js";
 
 // 内存级并发提交互斥锁
 const pendingSubmissions = new Set();
@@ -78,10 +80,10 @@ export function buildExecutionDispatchText(rec, dagPlan) {
     + `【各工作包详细派发阵容与验收契约 (基于拓扑最新分层)】\n`
     + `${nodesDetailLines}${conflictNotice}\n\n`
     + `【Agent 调度与执行契约（评估与审核发令统一版）】\n`
-    + `1. 评估与审核：必要只读取证后，施工前确认工具、状态、权限、范围、风险、分工理由与验收；多步骤工程、跨模块、关键技术未知、架构/接口封装、多Agent协作或planner复杂规划必须先展示可换人DAG，默认等待用户亲自点击已展示计划的「🚀 立即执行」。审核前主控和子代理均不得施工或提前派发业务执行代理；主控全做也不能绕过审核。简单低风险集中任务轻量评估后直接做，同包不逐工具评估。\n`
-    + `2. 发令与重评：展示、换人、投递成功、自动续接或泛指继续不算对未展示计划发令，主控不得替用户点击。仅用户当前明确指定这份已展示计划直接执行或本次不等按钮时可记录一次性替代授权，不推广到后续任务；工具不可用报告阻塞，不伪造点击。新模块、写目标、负责人、权限或关键依赖超出已审计划时重评、更新图并重新等待发令。有独立收益在计划中安排派发，发令后按最终人员落实；正交无冲突并行，依赖/共享写冲突串行，不因行数或工单长度单独拒绝，不凑人数。\n`
+    + `1. 评估与派发：施工前轻量确认目标、工具、权限、范围、依赖、共享资源与验收。粉哥hanako强制画布审批仅两类：岳主动要求分身，或重大复杂任务需规划（主控独立执行也适用）；岳岳在当前任务明确要求粉哥派发时或重大任务需规划时，必须先调用正式render_workflow展示目标、工作包、执行者、依赖、权限及验收，等待岳明确批准已展示方案后才派发/施工，所有默认派发、并发启动和批次恢复受此门禁约束。粉哥（Agent ID：hanako）排错必须实际派发至少一个子代理，推荐多角度并发多个，不固定要求两人，不能以问题简单免除派发，但命中门禁须批准后履行；搜索调研与项目了解按有效拆分收益。仅讨论或修改派发规则不触发当前启动子代理。两类之外按独立收益自主派发；其他Agent按其个人契约判断，不新增审批条件。\n`
+    + `2. 画布与发令：画布生成、展示与投递均不证明实际派发或批准；粉哥命中两类情形须按规划→展示画布→岳明确批准已展示方案→派发/施工执行，首次要求派发、生成投递、推荐项及后台完成/回调均不等批准。批准前仅许主控形成方案必要且已授权的只读检查，严禁先派后补图、新建或续接受影响执行分身、抢先施工及通过工作流或后台绕行；已有相关任务要求在受影响边界前暂停并核验真实状态。画布不可用报告并停在审批边界，不以文字或选项卡替代。当前按钮提交只授权当前展示计划，不扩展后续任务范围；主控不得代替用户点击。已批准方案的工作包、负责人、重要依赖、范围或风险实质变化，更新画布重新等待批准；等价低风险细节自主处理。其他Agent按个人契约与正式发令协议。删除、外部状态修改、难以撤销风险与授权缺口仍独立确认。工具、权限受限如实说明，不伪造点击或派发。正交无冲突并行，依赖/共享写冲突串行，不因行数或工单长度单独拒绝，不凑人数。\n`
     + `3. 唯一负责人：一包一执行者，文件、配置、安装、构建、服务和端口均属共享状态；主控不重复派出包施工。接手前确认原执行者完成或停止且无继续写入的遗留任务再核查现场；pending不证失败，busy不得同包接管。\n`
-    + `4. 会话复用与等待：简单工单几句话，自包含目标/边界/验收；同包用真实threadId续接。主会话推进独立工作，依赖结果时wait_for_tasks，不轮询或重复登记。\n`
+    + `4. 会话复用与批次挂起：简单工单几句话，自包含目标/边界/验收，同包用真实threadId续接。粉哥在派发前完成必须亲自处理的独立准备，或将可委派的就绪包纳入当前依赖批次；本批派发后交回控制权，无关任务不捆绑成全局门槛。正式宿主已支持并验收时，先建批次再启动子任务、回执落盘后停止父回合、等待期间禁止自动模型调用，本批所有成功/失败/取消等终态且父回合已退出后合并结果恢复；单任务通知不得提前唤醒。画布和插件不提供此宿主能力，拟新增接口须正式目录可见，候选代码不证明生效。当前仅subagent/wait_for_tasks时先简短进度、启动本批、记录真实task_id，再独立登记等待，之后不主动工具、轮询、选项卡或保活输出，按平台要求最短收尾且不得称严格挂起。子代理只交付结果，不发送继续或ok go on驱动父会话；用户插话可接管，停止撤销自动恢复。完成/旧attempt/重启及去重由宿主核对，启动未确认不得盲目重派。恢复后核验稳定产物。\n`
     + `5. 分级审查原则：普通改动适用测试；认证、授权、目录边界、命令策略、自动执行触发变更默认独立复核。自测有价值但不替代复核，构建不替代行为验收；无代理或环境受限报告缺口/待测，不冒称通过，不擅自启用未充分验证的高风险变更，不一律转交用户。\n`
     + `6. 权限与隔离底线：以当前Agent有效规则和用户授权为准，计划按钮不扩大权限，子Agent只隔离上下文；执行者不顺手重构/新增依赖/扩大范围，关键歧义先取证或回报。\n`
     + `7. 验收交付：执行者回报状态、改动产物、验证证据、问题与假设；主控核查实际差异和适用测试。无新证据重复尝试停止，有诊断修复可继续，不固定次数。视觉按实际能力，审美由用户最终决定，用户看效果与回滚说明按需，不强制三段交付。`;
@@ -109,19 +111,15 @@ export default function registerWorkflowRoutes(app, ctx) {
     return c.html(renderWorkflowPage(rec, dagPlan, agentRoster));
   });
 
-  // 2. 独立固定路由 /workflow/:id (严格防串卡与防路径穿越，显式兼容 latest 默认静态入口)
+  // 2. 独立固定路由 /workflow/:id (严格防串卡与防路径穿越，支持 latest)
   app.get("/workflow/:id", (c) => {
     let id = c.req.param("id");
     if (id === "latest") {
-      try {
-        const latestPath = join(ctx.dataDir, "workflows", "latest.json");
-        if (existsSync(latestPath)) {
-          const latestData = JSON.parse(readFileSync(latestPath, "utf-8"));
-          if (latestData && latestData.workflowId) {
-            id = latestData.workflowId;
-          }
-        }
-      } catch (_) {}
+      const latest = readLatestRecord(ctx.dataDir);
+      id = latest && latest.workflowId ? latest.workflowId : null;
+      if (!id) {
+        return c.text("未找到进行中的最新工作流", 404);
+      }
     }
 
     let rec;
@@ -147,19 +145,16 @@ export default function registerWorkflowRoutes(app, ctx) {
     return c.html(renderWorkflowPage(rec, dagPlan, agentRoster));
   });
 
-  // 3. 提交调度执行端点 (显式兼容 latest 解析)
+  // 3. 提交调度执行端点 (支持 :id === "latest" 动态解析)
   app.post("/workflow/:id/execute", async (c) => {
     let id = c.req.param("id");
+
     if (id === "latest") {
-      try {
-        const latestPath = join(ctx.dataDir, "workflows", "latest.json");
-        if (existsSync(latestPath)) {
-          const latestData = JSON.parse(readFileSync(latestPath, "utf-8"));
-          if (latestData && latestData.workflowId) {
-            id = latestData.workflowId;
-          }
-        }
-      } catch (_) {}
+      const latest = readLatestRecord(ctx.dataDir);
+      if (!latest || !latest.workflowId) {
+        return c.json({ ok: false, error: "not_found", message: "未找到进行中的最新工作流" }, 404);
+      }
+      id = latest.workflowId;
     }
 
     try {
@@ -292,20 +287,34 @@ export default function registerWorkflowRoutes(app, ctx) {
         return c.json({ ok: false, error: "invalid_agent_assignment", message: "存在未知执行人，请更换为当前有效专员。" }, 400);
       }
 
+      // 动态补齐 sessionId 解析 (防止宿主在缺少 sessionId 时抛出 Session manifest resolution 异常)
+      if (!rec.sessionId && rec.sessionPath) {
+        try {
+          const resolved = await resolveSessionIdFromPath(rec.sessionPath, ctx.dataDir, ctx.bus);
+          if (resolved) {
+            rec.sessionId = resolved;
+          }
+        } catch {
+          // 容错降级
+        }
+      }
+
       // 关键修复：发送前状态落盘为 pending！
       rec.status = "pending";
       rec.submittedAt = new Date().toISOString();
       writeWorkflowRecord(ctx.dataDir, rec);
 
-      if (ctx.bus?.request && rec.sessionId) {
+      if (ctx.bus?.request && (rec.sessionId || rec.sessionPath)) {
         const dispatchText = buildExecutionDispatchText(rec, dagPlan);
         const payload = {
           text: dispatchText,
-          sessionId: rec.sessionId,
           scope: "all"
         };
-        if (rec.sessionRef) payload.sessionRef = rec.sessionRef;
+        // 关键修复：双参数传递保障宿主寻址可靠性
+        if (rec.sessionId) payload.sessionId = rec.sessionId;
         if (rec.sessionPath) payload.sessionPath = rec.sessionPath;
+        // Target comes from the host-stamped creation context, never request JSON.
+        // No expired callToken is persisted or reused.
 
         ctx.log?.info?.(`[Workflow] 正在向宿主总线发送调度计划: ${id}`);
 
