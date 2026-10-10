@@ -526,6 +526,228 @@ test("SSR - GET /workflow/:id delivery_unknown 状态下初始 HTML 按钮必须
   }
 });
 
+test("Route - POST execute 显式携带 scope: 'all' 并验证宿主 accepted: true 正式契约", async () => {
+  const { tempDir } = setupTempWorkflowData();
+  try {
+    const app = createMockApp();
+    let sentPayload = null;
+
+    const mockCtx = {
+      dataDir: tempDir,
+      sessionId: "sess_mock_123",
+      sessionRef: { sessionId: "sess_mock_123", sessionPath: "path/to/session.jsonl" },
+      sessionPath: "path/to/session.jsonl",
+      bus: {
+        request: async (verb, payload) => {
+          assert.equal(verb, "session:send");
+          sentPayload = payload;
+          // 真实宿主返回结构：accepted: true
+          return {
+            sessionId: payload.sessionId,
+            sessionRef: payload.sessionRef,
+            sessionPath: payload.sessionPath,
+            accepted: true
+          };
+        }
+      }
+    };
+
+    registerWorkflowRoutes(app, mockCtx);
+
+    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.data.status, "submitted");
+
+    // 严密断言：发往宿主总线的 payload 必须显式指定 scope: "all"，且 sessionId 正确
+    assert(sentPayload !== null);
+    assert.equal(sentPayload.sessionId, "sess_mock_123");
+    assert.equal(sentPayload.scope, "all", "跨会话发往主会话必须显式指定 scope: 'all'");
+    assert(sentPayload.text.length > 0);
+
+    const saved = readWorkflowRecord(tempDir, "wf_test_001");
+    assert.equal(saved.status, "submitted");
+    assert.equal(saved.submitted, true);
+    assert.equal(saved.deliveryStatus, "confirmed");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Route - POST execute 缺少 app/sessions.manage 权限时宿主抛错，明确返回 403 permission_denied 且回滚为 idle 允许重试", async () => {
+  const { tempDir } = setupTempWorkflowData();
+  try {
+    const app = createMockApp();
+
+    const mockCtx = {
+      dataDir: tempDir,
+      sessionId: "sess_mock_123",
+      bus: {
+        request: async () => {
+          // 真实宿主缺失 app/sessions.manage 时的标准抛错
+          throw new Error('app "agent-workflow-canvas" is not authorized to session:send outside this app — the user has not granted the "app/sessions.manage" permission (Settings → Apps → App capabilities)');
+        }
+      }
+    };
+
+    registerWorkflowRoutes(app, mockCtx);
+
+    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.data.error, "permission_denied");
+    assert(res.data.message.includes("app/sessions.manage"), "错误提示必须明确指明缺少 app/sessions.manage 权限");
+
+    // 磁盘记录绝不得被锁定为 delivery_unknown，必须安全回滚为 idle，允许用户授权后重试
+    const saved = readWorkflowRecord(tempDir, "wf_test_001");
+    assert.equal(saved.status, "idle");
+    assert.equal(saved.submitted, false);
+    assert.equal(saved.locked, false);
+    assert(saved.lastError.includes("app/sessions.manage"));
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Route - POST execute 缺少 app/session.start-turn 权限时宿主抛错，明确返回 403 permission_denied 且回滚为 idle 允许重试", async () => {
+  const { tempDir } = setupTempWorkflowData();
+  try {
+    const app = createMockApp();
+
+    const mockCtx = {
+      dataDir: tempDir,
+      sessionId: "sess_mock_123",
+      bus: {
+        request: async () => {
+          // 真实宿主缺失 app/session.start-turn 时的标准抛错
+          throw new Error('app "agent-workflow-canvas" is not authorized to start a conversation turn in this session — the user has not granted the "app/session.start-turn" permission (Settings → Apps → App capabilities)');
+        }
+      }
+    };
+
+    registerWorkflowRoutes(app, mockCtx);
+
+    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.data.error, "permission_denied");
+    assert(res.data.message.includes("app/session.start-turn"), "错误提示必须明确指明缺少 app/session.start-turn 权限");
+
+    const saved = readWorkflowRecord(tempDir, "wf_test_001");
+    assert.equal(saved.status, "idle");
+    assert.equal(saved.submitted, false);
+    assert.equal(saved.locked, false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Route - POST execute 目标会话归属越界时宿主抛错，明确返回 403 ownership_denied 且回滚为 idle 允许重试", async () => {
+  const { tempDir } = setupTempWorkflowData();
+  try {
+    const app = createMockApp();
+
+    const mockCtx = {
+      dataDir: tempDir,
+      sessionId: "sess_mock_123",
+      bus: {
+        request: async () => {
+          // 真实宿主未指定 scope: all 或跨分区归属拒绝时的标准抛错
+          throw new Error('session:send: session "sess_mock_123" does not belong to app "agent-workflow-canvas"');
+        }
+      }
+    };
+
+    registerWorkflowRoutes(app, mockCtx);
+
+    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.data.error, "ownership_denied");
+    assert(res.data.message.includes("does not belong to app"));
+
+    const saved = readWorkflowRecord(tempDir, "wf_test_001");
+    assert.equal(saved.status, "idle");
+    assert.equal(saved.submitted, false);
+    assert.equal(saved.locked, false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Route - POST execute 权限被拒后用户补齐授权，第二次重试发令成功投递闭环", async () => {
+  const { tempDir } = setupTempWorkflowData();
+  try {
+    const app = createMockApp();
+    let attempt = 0;
+
+    const mockCtx = {
+      dataDir: tempDir,
+      sessionId: "sess_mock_123",
+      bus: {
+        request: async () => {
+          attempt++;
+          if (attempt === 1) {
+            // 第一次发令：未授权
+            throw new Error('app "agent-workflow-canvas" is not authorized to session:send outside this app — the user has not granted the "app/sessions.manage" permission (Settings → Apps → App capabilities)');
+          }
+          // 第二次发令：用户在设置中授权后重试，成功投递
+          return { accepted: true, sessionId: "sess_mock_123" };
+        }
+      }
+    };
+
+    registerWorkflowRoutes(app, mockCtx);
+
+    // 第一次执行：被拒
+    const res1 = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+    assert.equal(res1.status, 403);
+    assert.equal(res1.data.error, "permission_denied");
+
+    let saved = readWorkflowRecord(tempDir, "wf_test_001");
+    assert.equal(saved.status, "idle");
+    assert.equal(saved.submitted, false);
+
+    // 第二次执行：成功
+    const res2 = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+    assert.equal(res2.status, 200);
+    assert.equal(res2.data.status, "submitted");
+
+    saved = readWorkflowRecord(tempDir, "wf_test_001");
+    assert.equal(saved.status, "submitted");
+    assert.equal(saved.submitted, true);
+    assert.equal(saved.deliveryStatus, "confirmed");
+
+    // 第三次执行：已被终态拦截，返回 400 already_submitted
+    const res3 = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+    assert.equal(res3.status, 400);
+    assert.equal(res3.data.error, "already_submitted");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 
 
 

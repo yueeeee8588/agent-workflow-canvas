@@ -278,7 +278,8 @@ export default function registerWorkflowRoutes(app, ctx) {
         const dispatchText = buildExecutionDispatchText(rec, dagPlan);
         const payload = {
           text: dispatchText,
-          sessionId: rec.sessionId
+          sessionId: rec.sessionId,
+          scope: "all"
         };
         if (rec.sessionRef) payload.sessionRef = rec.sessionRef;
         if (rec.sessionPath) payload.sessionPath = rec.sessionPath;
@@ -290,6 +291,33 @@ export default function registerWorkflowRoutes(app, ctx) {
           busResp = await ctx.bus.request("session:send", payload);
         } catch (err) {
           const errStr = String(err?.message || err);
+
+          // 核心修复：精准区分「宿主权限/归属/参数明确拒绝」与「未知网络超时/传输中断」
+          const isPermissionDenied =
+            errStr.includes("is not authorized") ||
+            errStr.includes("has not granted") ||
+            err?.code === "PERMISSION_DENIED" ||
+            err?.status === 403;
+          const isOwnershipDenied =
+            errStr.includes("does not belong to app") ||
+            errStr.includes("scope must be");
+
+          if (isPermissionDenied || isOwnershipDenied) {
+            // 宿主明确拒绝门禁：消息未被排队或投递，安全回滚 pending 状态为 idle，允许用户授权后重试
+            rec.status = "idle";
+            rec.submitted = false;
+            rec.locked = false;
+            rec.lastError = errStr;
+            writeWorkflowRecord(ctx.dataDir, rec);
+
+            ctx.log?.warn?.(`[Workflow] 宿主总线权限/归属明确拒绝: ${id}`, errStr);
+            return c.json({
+              ok: false,
+              error: isPermissionDenied ? "permission_denied" : "ownership_denied",
+              message: `宿主明确拒绝发令: ${errStr}`
+            }, 403);
+          }
+
           // 超时或未知/网络传输异常：保守落盘锁定为 delivery_unknown，严禁重置为 idle，防重复发令
           rec.status = "delivery_unknown";
           rec.locked = true;
@@ -314,25 +342,27 @@ export default function registerWorkflowRoutes(app, ctx) {
           rec.status = "idle";
           rec.submitted = false;
           rec.locked = false;
+          rec.lastError = typeof errMsg === "object" ? JSON.stringify(errMsg) : errMsg;
           writeWorkflowRecord(ctx.dataDir, rec);
 
           return c.json({
             ok: false,
             error: "bus_rejected",
-            message: `总线明确拒绝: ${typeof errMsg === "object" ? JSON.stringify(errMsg) : errMsg}`
+            message: `总线明确拒绝: ${rec.lastError}`
           }, 502);
         }
 
-        // 严格化总线回执判断：总线响应必须明确有 ok === true，undefined、空对象或 ok !== true 绝不得标记为 submitted
-        if (!busResp || busResp.ok !== true) {
-          const errMsg = "宿主总线应答格式无效或未包含明确成功确认 (ok !== true)";
+        // 严格化总线回执判断：宿主正式成功回执为 accepted === true，兼容 mock 的 ok === true
+        const isAccepted = Boolean(busResp && (busResp.accepted === true || busResp.ok === true));
+        if (!isAccepted) {
+          const errMsg = "宿主总线应答格式无效或未包含明确成功确认 (accepted !== true)";
           rec.status = "delivery_unknown";
           rec.locked = true;
           rec.lastError = errMsg;
           rec.lockedAt = new Date().toISOString();
           writeWorkflowRecord(ctx.dataDir, rec);
 
-          ctx.log?.warn?.(`[Workflow] 宿主总线回执未明确确认 ok: true，锁定为 delivery_unknown: ${id}`);
+          ctx.log?.warn?.(`[Workflow] 宿主总线回执未明确确认 accepted，锁定为 delivery_unknown: ${id}`);
           return c.json({
             ok: false,
             error: "delivery_unknown",
@@ -340,7 +370,7 @@ export default function registerWorkflowRoutes(app, ctx) {
           }, 502);
         }
 
-        // 真实 bus 明确确认 ok === true，正式标记 submitted 并落盘
+        // 真实 bus 明确确认 (accepted === true / ok === true)，正式标记 submitted 并落盘
         rec.status = "submitted";
         rec.submitted = true;
         rec.executed = true;
