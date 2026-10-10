@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import registerWorkflowRoutes, {
@@ -743,6 +743,87 @@ test("Route - POST execute 权限被拒后用户补齐授权，第二次重试�
     });
     assert.equal(res3.status, 400);
     assert.equal(res3.data.error, "already_submitted");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Route - GET /workflow/latest 显式支持读取最新工作流方案并成功渲染", async () => {
+  const { tempDir } = setupTempWorkflowData();
+  try {
+    const app = createMockApp();
+    registerWorkflowRoutes(app, { dataDir: tempDir });
+
+    // 写入 latest.json 索引指向 wf_test_001
+    const latestPath = join(tempDir, "workflows", "latest.json");
+    writeFileSync(latestPath, JSON.stringify({ workflowId: "wf_test_001", ts: new Date().toISOString() }, null, 2), "utf-8");
+
+    const res = await app.dispatch("GET", "/workflow/latest", { params: { id: "latest" } });
+    assert.equal(res.status, 200);
+    assert.equal(res.type, "html");
+    assert(res.data.includes("测试流水线"), "必须成功根据 latest.json 解析并渲染出目标工作流");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Route - POST execute 收到矛盾回执 { ok: true, accepted: false } 坚决拒绝判定为成功，锁定为 delivery_unknown 502", async () => {
+  const { tempDir } = setupTempWorkflowData();
+  try {
+    const app = createMockApp();
+
+    const mockCtx = {
+      dataDir: tempDir,
+      sessionId: "sess_mock_123",
+      bus: {
+        request: async () => {
+          // 模拟矛盾回执：虽然 ok 为 true，但 accepted 明确为 false
+          return { ok: true, accepted: false };
+        }
+      }
+    };
+
+    registerWorkflowRoutes(app, mockCtx);
+
+    const res = await app.dispatch("POST", "/workflow/wf_test_001/execute", {
+      params: { id: "wf_test_001" },
+      body: {}
+    });
+
+    assert.equal(res.status, 502);
+    assert.equal(res.data.error, "delivery_unknown");
+
+    const saved = readWorkflowRecord(tempDir, "wf_test_001");
+    assert.equal(saved.status, "delivery_unknown");
+    assert.equal(saved.locked, true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Tool - render_workflow 执行时自动生成静态物理文件并在 ui/workflow/<id> 落盘", async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), "wf-tool-render-"));
+  try {
+    const { execute: renderExecute } = await import("../tools/render_workflow.js");
+    const mockCtx = { dataDir: tempDir, sessionId: "sess_test_render" };
+
+    const result = await renderExecute({
+      title: "静态预渲染断言测试流",
+      nodes: [
+        { id: "node1", title: "核心处理", defaultAgent: "coder" }
+      ]
+    }, mockCtx);
+
+    const wfId = result.details.card.route.split("/").pop();
+    assert(wfId.startsWith("wf_"));
+
+    // 断言当前工程的 ui/workflow 目录下确实存在预渲染的物理文件
+    const { fileURLToPath } = await import("node:url");
+    const appDir = join(fileURLToPath(import.meta.url), "../..");
+    const renderedFilePath = join(appDir, "ui", "workflow", wfId);
+    assert(existsSync(renderedFilePath), `预渲染文件 ${renderedFilePath} 必须物理存在，彻底杜绝 APP_UI_NOT_FOUND`);
+    const content = readFileSync(renderedFilePath, "utf-8");
+    assert(content.includes("静态预渲染断言测试流"));
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

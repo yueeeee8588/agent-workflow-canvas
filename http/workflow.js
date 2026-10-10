@@ -109,9 +109,21 @@ export default function registerWorkflowRoutes(app, ctx) {
     return c.html(renderWorkflowPage(rec, dagPlan, agentRoster));
   });
 
-  // 2. 独立固定路由 /workflow/:id (严格防串卡与防路径穿越)
+  // 2. 独立固定路由 /workflow/:id (严格防串卡与防路径穿越，显式兼容 latest 默认静态入口)
   app.get("/workflow/:id", (c) => {
-    const id = c.req.param("id");
+    let id = c.req.param("id");
+    if (id === "latest") {
+      try {
+        const latestPath = join(ctx.dataDir, "workflows", "latest.json");
+        if (existsSync(latestPath)) {
+          const latestData = JSON.parse(readFileSync(latestPath, "utf-8"));
+          if (latestData && latestData.workflowId) {
+            id = latestData.workflowId;
+          }
+        }
+      } catch (_) {}
+    }
+
     let rec;
     try {
       rec = readWorkflowRecord(ctx.dataDir, id);
@@ -135,9 +147,20 @@ export default function registerWorkflowRoutes(app, ctx) {
     return c.html(renderWorkflowPage(rec, dagPlan, agentRoster));
   });
 
-  // 3. 提交调度执行端点
+  // 3. 提交调度执行端点 (显式兼容 latest 解析)
   app.post("/workflow/:id/execute", async (c) => {
-    const id = c.req.param("id");
+    let id = c.req.param("id");
+    if (id === "latest") {
+      try {
+        const latestPath = join(ctx.dataDir, "workflows", "latest.json");
+        if (existsSync(latestPath)) {
+          const latestData = JSON.parse(readFileSync(latestPath, "utf-8"));
+          if (latestData && latestData.workflowId) {
+            id = latestData.workflowId;
+          }
+        }
+      } catch (_) {}
+    }
 
     try {
       validateWorkflowId(id);
