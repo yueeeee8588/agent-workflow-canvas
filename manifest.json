@@ -2,18 +2,17 @@
   "manifestVersion": 2,
   "id": "agent-workflow-canvas",
   "name": "Agent 工作流画布",
-  "version": "2.3.4",
-  "description": "多Agent协作工作流画布。粉哥hanako在岳主动要求分身或重大任务需规划时，先画布展示、等明确批准后派发；其他Agent依个人契约。保留DAG防冲突、批次等待与宿主能力门禁，画布生成不等批准。",
+  "version": "2.4.1",
+  "description": "多Agent协作工作流画布。采用快捷回复卡片回传架构；生成立即返回，前端通过认证UI API持久化批准并无to回传，模型工具读可信后端凭据；移除会话级黑名单锁；保留DAG防冲突、负责人下拉与自定义专员。",
   "minAppVersion": "0.1013.0",
   "entry": "index.js",
   "icon": "assets/icon.svg",
   "capabilities": [
     "app/tools.expose-to-model",
+    "app/session.start-turn",
     "app/ui.open-external",
     "app/resources.read",
-    "app/resources.write",
-    "app/session.start-turn",
-    "app/sessions.manage"
+    "app/resources.write"
   ],
   "contributes": {
     "cards": [

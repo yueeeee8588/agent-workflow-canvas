@@ -1,7 +1,7 @@
 {
   "name": "agent-workflow-canvas",
-  "version": "2.3.4",
-  "description": "Agent 工作流画布 V2.3.4 - 粉哥两类画布审批与等待边界，其他Agent依个人契约，保留批次等待和DAG防冲突", 
+  "version": "2.4.1",
+  "description": "Agent 工作流画布 V2.4.1 - 补回宿主事件起回合权限；快捷回复卡片回传架构；生成立即返回，前端通过认证UI API持久化批准并无to回传，模型工具读可信后端凭据，移除会话级黑名单锁", 
   "type": "module",
   "main": "index.js",
   "scripts": {
