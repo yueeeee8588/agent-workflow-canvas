@@ -193,22 +193,40 @@ test("Route: POST /workflow/:id/execute 支持 latest 动态解析且持久化�
 });
 
 test("session_resolver: 端到端真实历史会话文件反查合法 sess_ ID", async () => {
-  const realSessionPath = "C:\\Users\\asus\\.hanako\\agents\\hanako\\sessions\\2026-10-10T16-43-10-079Z_01a126b2-6d7f-7c73-81c6-2db1ce9c6105.jsonl";
-  const expectedSessionId = "sess_0mv2mi301_11217e8da39169c2a5ea";
+  const tempDir = mkdtempSync(join(tmpdir(), "session-resolve-fixture-"));
+  try {
+    const sessionDir = join(tempDir, "agents", "mock", "sessions");
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, "fixture_session.jsonl");
+    const expectedSessionId = "sess_fixture_test_888";
+    writeFileSync(sessionFile, JSON.stringify({ sessionId: expectedSessionId, content: "test" }) + "\n");
 
-  const resolved = await resolveSessionIdFromPath(realSessionPath);
-  assert.equal(resolved, expectedSessionId);
-  assert.equal(isValidHostSessionId(resolved), true);
+    const resolved = await resolveSessionIdFromPath(sessionFile);
+    assert.equal(resolved, expectedSessionId);
+    assert.equal(isValidHostSessionId(resolved), true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("session_resolver: 各种路径格式（正斜杠、反斜杠、大写、小写）的鲁棒性反查", async () => {
-  const base = "C:/Users/asus/.hanako/agents/hanako/sessions/2026-10-10T16-43-10-079Z_01a126b2-6d7f-7c73-81c6-2db1ce9c6105.jsonl";
-  const upper = "C:\\USERS\\ASUS\\.HANAKO\\AGENTS\\HANAKO\\SESSIONS\\2026-10-10T16-43-10-079Z_01A126B2-6D7F-7C73-81C6-2DB1CE9C6105.JSONL";
-  const expectedSessionId = "sess_0mv2mi301_11217e8da39169c2a5ea";
+  const tempDir = mkdtempSync(join(tmpdir(), "session-case-fixture-"));
+  try {
+    const sessionDir = join(tempDir, "agents", "mock", "sessions");
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, "fixture_session.jsonl");
+    const expectedSessionId = "sess_fixture_robust_999";
+    writeFileSync(sessionFile, JSON.stringify({ sessionId: expectedSessionId, content: "test" }) + "\n");
 
-  const resSlash = await resolveSessionIdFromPath(base);
-  const resUpper = await resolveSessionIdFromPath(upper);
+    const slashPath = sessionFile.replace(/\\/g, "/");
+    const upperPath = sessionFile.toUpperCase();
 
-  assert.equal(resSlash, expectedSessionId);
-  assert.equal(resUpper, expectedSessionId);
+    const resSlash = await resolveSessionIdFromPath(slashPath);
+    const resUpper = await resolveSessionIdFromPath(upperPath);
+
+    assert.equal(resSlash, expectedSessionId);
+    assert.equal(resUpper, expectedSessionId);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
