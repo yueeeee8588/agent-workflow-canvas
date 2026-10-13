@@ -24,7 +24,7 @@ test('manifest requests clean capabilities and removes pre-execute hook and sess
   assert.ok(manifest.capabilities.includes('app/resources.read'));
   assert.ok(manifest.capabilities.includes('app/resources.write'));
   assert.equal(manifest.version, '2.4.2');
-  assert.ok(manifest.icon.startsWith('data:image/svg+xml;base64,'), '应用图标必须采用 Base64 Data URI');
+  assert.equal(manifest.icon, 'assets/icon.svg', 'manifest.json 内部 icon 必须为包内相对路径');
 });
 
 test('apply: 成功注册三个模型工具，不再强依赖 pre-execute 钩子，不锁会话', async () => {
