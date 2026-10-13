@@ -1,4 +1,4 @@
-# Agent Workflow Canvas (多 Agent 工作流画布 · 快捷回复回传架构版 V2.4.1)
+# Agent Workflow Canvas (多 Agent 工作流画布 · 快捷回复回传架构版 V2.4.2)
 
 ## 2.4.1 必要权限修正
 
