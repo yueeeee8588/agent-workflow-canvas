@@ -22,6 +22,7 @@ import { buildDagPlan, normalizeNodes } from "../lib/dag.js";
 import { resolveAgentRoster, isValidAgentId } from "../lib/agents.js";
 import { renderWorkflowPage } from "../lib/theme.js";
 import { calculatePlanHash, generateSubmissionId, getApprovedWorkflowRecord } from "../lib/approval_gate.js";
+import { buildApprovalHandoff } from "../lib/approval_handoff.js";
 
 export function readWorkflowRecord(dataDir, id) {
   validateWorkflowId(id);
@@ -81,6 +82,7 @@ export function buildExecutionDispatchText(rec, dagPlan) {
     : "";
 
   return `【审核发令已提交】用户已通过看板「🚀 立即执行」提交「${rec.title}」的已展示计划；主控核对真实发令来源、最终人员及当前权限后按本计划施工，投递成功不证明已派发、完成或验收通过。\n`
+    + `【最终人员核对】派发前必须用 get_approved_workflow(workflowId, planHash) 读取可信后台，核对批准状态、指纹与 submissionId，再用 consume_workflow_approval 核销。按返回 nodes 的 assignedAgent 优先派发；仅缺失时回退 defaultAgent，不得沿用出图时旧人选。duplicate=true 时先核查已有任务，避免重复派发。\n`
     + `派发路线: ${dagPlan.dispatchLane} (${dagPlan.laneReason})\n`
     + `拓扑规模: 共 ${dagPlan.stats.totalNodes} 个任务节点，${dagPlan.stats.totalLayers} 个执行阶段，最大并发度 ${dagPlan.stats.maxConcurrency}\n\n`
     + `【各工作包详细派发阵容与验收契约 (基于拓扑最新分层)】\n`
@@ -318,6 +320,7 @@ export default function registerWorkflowRoutes(app, ctx) {
         submissionId: rec.submissionId,
         status: rec.status,
         dispatchText: rec.dispatchText || buildExecutionDispatchText(rec, dagPlan),
+        approvalEvent: buildApprovalHandoff({ workflowId: id, planHash: rec.planHash, submissionId: rec.submissionId, title: rec.title, nodes: dagPlan.nodes }),
         idempotent: true,
         message: "方案已批准，返回已有可信凭据 (支持重新回传事件)"
       }, 200);
@@ -356,6 +359,7 @@ export default function registerWorkflowRoutes(app, ctx) {
       submissionId,
       status: "approved",
       dispatchText,
+      approvalEvent: buildApprovalHandoff({ workflowId: id, planHash: calculatedHash, submissionId, title: rec.title, nodes: dagPlan.nodes }),
       message: "方案已成功批准并持久化凭据 (submissionId为公开去重标识，非权限凭据)"
     }, 200);
   };

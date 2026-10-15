@@ -1,7 +1,7 @@
 {
   "name": "agent-workflow-canvas",
-  "version": "2.4.2",
-  "description": "Agent 工作流画布 V2.4.2 - 升级应用图标为 Base64 内联 Data URI；补回宿主事件起回合权限；快捷回复卡片回传架构；移除会话级黑名单锁",
+  "version": "2.4.3",
+  "description": "Agent 工作流画布 V2.4.3 - 最终人员批准回传与读取指引；刷新重发统一；8KiB事件边界；无会话锁",
   "type": "module",
   "main": "index.js",
   "scripts": {

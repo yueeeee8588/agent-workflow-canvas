@@ -247,7 +247,8 @@ export async function execute(input, ctx = {}) {
     + `• 拓扑状态: 共 ${dagPlan.stats.totalNodes} 个任务节点，${dagPlan.stats.totalLayers} 个执行阶段，最大并发度 ${dagPlan.stats.maxConcurrency}\n`
     + `• 专员名单快照: ${agentRoster.label}${conflictText}\n`
     + `• 工作流标识: ${workflowId}\n`
-    + `卡片已立即呈现。请审阅边界与验收、选择各工作包负责人，并在卡片中点击确认；确认后将通过快捷回复卡片架构在后端持久化凭据并向宿主回传事件。当前画布等待审批，生成与展示均不等于批准，未批准前不启动图中分身或施工。`;
+    + `卡片已立即呈现。请审阅边界与验收、选择各工作包负责人，并在卡片中点击确认；确认后将通过快捷回复卡片架构在后端持久化凭据并向宿主回传事件。当前画布等待审批，生成与展示均不等于批准，未批准前不启动图中分身或施工。\n`
+    + `收到 workflow.approved 事件后，用户可能已在画布换人：必须先调用 get_approved_workflow(workflowId, planHash) 读取最终方案，核对批准状态、指纹及 submissionId，再调用 consume_workflow_approval 核销；按返回 nodes 的 assignedAgent 优先派发，不得直接沿用本轮出图时的 defaultAgent 或历史分工。重复领取先核查已有任务，不重复派发。`;
 
   // 12. 立即返回卡片详情 (不再强制依赖 sessionId 路由条件)
   return {

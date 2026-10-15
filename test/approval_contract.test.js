@@ -23,7 +23,7 @@ test('manifest requests clean capabilities and removes pre-execute hook and sess
   assert.ok(manifest.capabilities.includes('app/tools.expose-to-model'));
   assert.ok(manifest.capabilities.includes('app/resources.read'));
   assert.ok(manifest.capabilities.includes('app/resources.write'));
-  assert.equal(manifest.version, '2.4.2');
+  assert.equal(manifest.version, '2.4.3');
   assert.equal(manifest.icon, 'assets/icon.svg', 'manifest.json 内部 icon 必须为包内相对路径');
 });
 

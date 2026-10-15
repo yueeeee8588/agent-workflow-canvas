@@ -13,12 +13,20 @@ export function initializeWorkflow(data, hana) {
   var isConsumed = Boolean(data.status === "consumed" || data.consumed === true);
   var isApproved = Boolean(data.status === "approved" || data.approvalGranted === true);
   var cachedEventPayload = null;
-  if (data.planHash && data.submissionId) {
-    cachedEventPayload = {
-      workflowId: WORKFLOW_ID,
-      planHash: data.planHash,
-      submissionId: data.submissionId
-    };
+  if (isApproved && data.approvalEvent) {
+    cachedEventPayload = readApprovalEvent(data.approvalEvent, data);
+  }
+
+  // Always forward the backend handoff intact. Never rebuild it from old defaults
+  // or current DOM values; this path is shared by first approval and resend.
+  function readApprovalEvent(event, credentials) {
+    if (!event || event.schemaVersion !== 1 || event.workflowId !== WORKFLOW_ID
+      || event.planHash !== credentials.planHash || event.submissionId !== credentials.submissionId
+      || typeof event.instructions !== "string" || !Array.isArray(event.requiredToolCalls)
+      || (!event.assignments && event.assignmentsOmitted !== true)) {
+      throw new Error("批准回传缺少最终人员或读取指引，请刷新画布后重试。");
+    }
+    return event;
   }
 
   var svg = document.getElementById("svg-connections");
@@ -390,7 +398,7 @@ export function initializeWorkflow(data, hana) {
 
     // 【关键手势保障路径】：如果已有已批准并持久化的凭证，立刻在当前用户手势同步时刻调用 emit
     if (cachedEventPayload) {
-      btnText.textContent = "正在同步回传审批凭据...";
+      btnText.textContent = "正在回传最终分工...";
       btn.disabled = true;
       isSubmitting = true;
 
@@ -404,7 +412,7 @@ export function initializeWorkflow(data, hana) {
           isSubmitting = false;
           btn.disabled = false;
           if (res && res.success === true) {
-            btnText.textContent = "已发送批准凭据 (点击可重发)";
+            btnText.textContent = "已发送最终分工 (点击可重发)";
             badge.textContent = "已回传宿主路由";
             badge.className = "title-badge badge-status-done";
           } else {
@@ -417,6 +425,36 @@ export function initializeWorkflow(data, hana) {
           btn.disabled = false;
           btnText.textContent = "🚀 再次点击发送已批准方案";
           showAlertModal("回传受阻: " + (err && err.message ? err.message : err), "投递受阻", "⚠️");
+        });
+      return;
+    }
+
+    // Older already-approved markup may contain only the three legacy IDs.
+    // Recover the handoff from verified storage rather than posting DOM choices.
+    if (isApproved) {
+      isSubmitting = true;
+      btn.disabled = true;
+      hana.api.fetch("workflow/" + encodeURIComponent(WORKFLOW_ID) + "/approval")
+        .then(function(res) {
+          if (!res.ok) throw new Error("读取批准方案失败 (" + res.status + ")");
+          return res.json();
+        })
+        .then(function(result) {
+          var approved = result && result.data;
+          if (!result.ok || !approved || approved.approved !== true || approved.hashMismatch) {
+            throw new Error("后台批准方案未通过校验");
+          }
+          cachedEventPayload = readApprovalEvent(approved.approvalEvent, approved);
+          isConsumed = Boolean(approved.consumed);
+          btnText.textContent = "🚀 再次点击发送已批准方案";
+          updateSummary();
+        })
+        .catch(function(err) {
+          showAlertModal(err.message, "读取批准方案受阻", "⚠️");
+        })
+        .finally(function() {
+          isSubmitting = false;
+          btn.disabled = isConsumed;
         });
       return;
     }
@@ -447,23 +485,19 @@ export function initializeWorkflow(data, hana) {
       });
     })
     .then(function(result) {
-      isSubmitting = false;
       if (result.ok && result.data && result.data.ok) {
         isApproved = true;
         lockConfiguration(); // 方案获批后立刻锁定所有人员选择框
 
-        cachedEventPayload = {
-          workflowId: result.data.workflowId,
-          planHash: result.data.planHash,
-          submissionId: result.data.submissionId
-        };
+        cachedEventPayload = readApprovalEvent(result.data.approvalEvent, result.data);
 
         // 尝试一次当前 emit
         var tryEmit = dispatchHostEmit(cachedEventPayload);
         Promise.resolve(tryEmit).then(function(res) {
+          isSubmitting = false;
           btn.disabled = false;
           if (res && res.success === true) {
-            btnText.textContent = "已发送批准凭据 (点击可重发)";
+            btnText.textContent = "已发送最终分工 (点击可重发)";
             badge.textContent = "已回传宿主路由";
             badge.className = "title-badge badge-status-done";
           } else {
@@ -471,11 +505,13 @@ export function initializeWorkflow(data, hana) {
             badge.textContent = "方案已核准待发送";
           }
         }).catch(function() {
+          isSubmitting = false;
           btn.disabled = false;
           btnText.textContent = "🚀 再次点击发送已批准方案";
           badge.textContent = "方案已核准待发送";
         });
       } else {
+        isSubmitting = false;
         btn.disabled = false;
         var errMsg = (result.data && (result.data.message || result.data.error)) || "提交受阻";
         btnText.textContent = "确认方案并批准";
@@ -486,7 +522,7 @@ export function initializeWorkflow(data, hana) {
       isSubmitting = false;
       btn.disabled = false;
       btnText.textContent = "重新尝试登记批准";
-      showAlertModal("网络异常，未能成功持久化审批凭据: " + (err && err.message ? err.message : err), "连接失败", "⚠️");
+      showAlertModal((isApproved ? "方案已保存，最终分工尚未回传，请刷新后重试: " : "方案登记或响应失败，请重试: ") + (err && err.message ? err.message : err), "回传未完成", "⚠️");
     });
   });
 

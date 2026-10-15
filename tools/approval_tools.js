@@ -12,7 +12,7 @@ import { validateWorkflowId } from "../lib/security.js";
 
 export const getApprovedWorkflowTool = {
   name: "get_approved_workflow",
-  description: "读取可信后端已持久化批准的工作流全量方案及当前核销恢复状态。只能返回真实服务端记录，不信任前端或事件 payload 未经验证的声明；若工作流未获批准或方案指纹不匹配则安全拒绝。批准仅代表用户确认已展示计划，不扩大模型既有工具或操作权限。",
+  description: "读取可信后端已持久化批准的工作流全量方案及当前核销恢复状态。只能返回真实服务端记录，不信任前端或事件 payload 未经验证的声明；若工作流未获批准或方案指纹不匹配则安全拒绝。收到 workflow.approved 必须先调用本工具读取最终人员，核对 planHash/submissionId 后核销；按 nodes.assignedAgent 优先派发，禁止沿用创建画布时的默认人选。批准不扩大模型既有工具或操作权限。",
   parameters: {
     type: "object",
     properties: {
